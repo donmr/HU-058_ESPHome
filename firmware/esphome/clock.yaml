@@ -1,6 +1,6 @@
 substitutions:
-  name: wifi-clock
-  friendly_name: WiFi Clock
+  name: bedroom-clock
+  friendly_name: Bedroom Clock
 
 esphome:
   name: ${name}
@@ -146,7 +146,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
 
 wifi:
   ssid: !secret wifi_ssid
