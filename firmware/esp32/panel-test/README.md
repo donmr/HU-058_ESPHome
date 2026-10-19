@@ -35,10 +35,24 @@ The VIN on the ESP32 can be connected directly to the USB jack on the clock, so 
 
 ## Build
 
+PlatformIO:
+
 ```
 pio run -t upload
 pio device monitor
 ```
+
+ESP-IDF (v5.3 to v6.1), building the same `src/main.cpp` with the Arduino core
+as an IDF component:
+
+```
+idf.py set-target esp32
+idf.py -p /dev/ttyUSB0 flash monitor
+```
+
+The first build downloads arduino-esp32 into `managed_components/`.
+`sdkconfig.defaults` holds the settings the Arduino component needs, and builds
+only its core, none of its optional libraries.
 
 ## Commands
 

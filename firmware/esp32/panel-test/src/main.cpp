@@ -10,6 +10,12 @@
 #include <esp_timer.h>
 #include <string.h>
 
+// The PlatformIO Arduino core brings in the GPIO register struct through
+// Arduino.h. The arduino-esp32 IDF component used by the ESP-IDF build does not.
+#ifndef PLATFORMIO
+#include <soc/gpio_struct.h>
+#endif
+
 // ESP32 GPIO -> MCU socket pin on the clock board. Ground through socket pin 8.
 static const int PIN_CLK = 22;     // socket pin 14 (HU-058D) or 16 (HU-058/SE), driver 1 clock
 static const int PIN_DATA = 21;    // socket pin 5,  driver 1 data
@@ -377,8 +383,8 @@ void loop() {
       case '6': patternDash6(); Serial.println("-6- blue"); break;
       case 'w': g_walk = !g_walk; Serial.printf("walk %s\n", g_walk ? "on" : "off"); break;
       case 'n': g_walkStep++; patternWalkStep(); break;
-      case '+': if (g_current < 0xF) g_current++; Serial.printf("IS 0x%X\n", g_current); break;
-      case '-': if (g_current > 0) g_current--; Serial.printf("IS 0x%X\n", g_current); break;
+      case '+': if (g_current < 0xF) g_current = g_current + 1; Serial.printf("IS 0x%X\n", g_current); break;
+      case '-': if (g_current > 0) g_current = g_current - 1; Serial.printf("IS 0x%X\n", g_current); break;
       case '?': help(); break;
       default: break;
     }
