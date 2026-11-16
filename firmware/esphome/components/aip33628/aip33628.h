@@ -45,7 +45,7 @@ static const uint8_t DRAM_ATTR IS_WIRE[16] = {0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6,
 enum Channel : uint8_t { CH_BLUE = 0, CH_GREEN = 1, CH_RED = 2 };
 
 // Where each LED physically sits, from docs/led-layout.md. id is the number
-// used by the board layout map and by set_position_color, 1 to 33, and 0
+// used by the board layout map, 1 to 33, and 0
 // marks a position the panel can address but nothing is wired to. nx runs 0
 // at the left edge of the first digit to 255 at the right edge of the last,
 // ny 0 at the top of a digit to 255 at the bottom.
@@ -55,15 +55,6 @@ struct PosGeom {
   uint8_t ny;
 };
 extern const PosGeom GEOM[4][9];
-
-// Running effects. Each owns the panel while it is selected, and selecting
-// NONE hands it back to whatever the colors were before.
-enum class Effect : uint8_t { NONE = 0, CYCLE = 1, FLASH = 2 };
-
-// How far apart an effect spreads its phase across the panel. PANEL moves
-// everything together, DIGIT gives each digit its own phase, LED gives every
-// position its own. The direction the spread runs is the effect angle.
-enum class Spread : uint8_t { PANEL = 0, DIGIT = 1, LED = 2 };
 
 // What the panel is showing. Everything except TIME is temporary and expires
 // on its own, so no caller can leave the clock stuck not being a clock.
@@ -130,41 +121,13 @@ class Aip33628Panel : public Component {
   void show_seconds(int ms);
   void show_number(int value, const std::string &unit, int ms);
   // Every populated position, white, at a fixed brightness. Ignores the
-  // color tiers, any running effect, and the light being off.
+  // light's color and the light being off.
   void lamp_test(int ms);
 
-  // Per digit color. Blocks are 0 to 3, left to right, and each carries its
-  // own annunciator: block 0 the AM mark, block 1 the colon, block 2 the date
-  // dash. Components run 0 to 1 and are used as given rather than normalized,
-  // so a digit can be dimmer than its neighbors as well as a different hue,
-  // which is what a per digit fade needs. A digit with no color of its own
-  // follows the master light.
-  void set_digit_color(int digit, float r, float g, float b);
-  void clear_digit_colors();
-
-  // One LED, by the id in docs/led-layout.md. Overrides the digit color,
-  // which in turn overrides the master light.
-  void set_position_color(int id, float r, float g, float b);
-  // A linear ramp between two colors across the panel. The angle is in
-  // degrees, 0 running left to right and 90 top to bottom, and the ramp is
-  // always stretched to cover the whole panel whatever the angle.
-  void set_gradient(float r0, float g0, float b0, float r1, float g1, float b1,
-                    float angle_deg);
-
-  // Effects. Everything here is live and takes hold on the next update.
-  void set_effect(int mode);
-  void set_effect_speed(float seconds);
-  void set_effect_spread(int mode);
-  void set_effect_angle(float deg);
-  void set_effect_hue_span(float deg);
-  void set_flash_fade(float seconds);
 
  protected:
   void render_();
   void apply_colors_();
-  void update_effect_(uint32_t now_ms);
-  void recompute_axis_();
-  void clear_positions_();
   void write_digit_(uint8_t block, char c);
   void write_pos_(uint8_t block, uint8_t seg, bool on);
   void draw_number_(int value, char unit);
@@ -197,34 +160,8 @@ class Aip33628Panel : public Component {
   uint8_t level_[4][9][3]{};
   uint8_t requested_current_{15};
 
-  // Color before it is quantized, in three tiers. A position with pos_set_
-  // wins, then a block with digit_set_, then the master light's base_rgb_.
+  // The master light's color before it is quantized.
   float base_rgb_[3]{1.0f, 1.0f, 1.0f};
-  float digit_rgb_[4][3]{};
-  bool digit_set_[4]{};
-  float pos_rgb_[4][9][3]{};
-  bool pos_set_[4][9]{};
-
-  // Scales every color on its way to a duty level. The flash effect drives
-  // it and nothing else touches it, so it stays at 1 the rest of the time.
-  float envelope_{1.0f};
-
-  Effect effect_{Effect::NONE};
-  Spread spread_{Spread::PANEL};
-  float effect_speed_{10.0f};  // seconds for one full cycle
-  float effect_angle_{0.0f};
-  // How much of the color wheel the panel covers end to end. A full turn on
-  // four digits packs the whole spectrum into a hand span and reads as
-  // noise, so the useful settings are narrow, a slice rather than the lot.
-  float hue_span_{90.0f};
-  // Seconds each flash transition takes. Zero snaps.
-  float flash_fade_{0.0f};
-  uint32_t effect_t0_{0};
-  uint32_t effect_at_{0};
-  // Where each position sits along the effect axis, 0 to 1, recomputed only
-  // when the angle changes rather than every frame.
-  float axis_pos_[4][9]{};
-  float axis_blk_[4]{};
 
   ScanBuf buf_[2]{};
   volatile uint8_t front_{0};

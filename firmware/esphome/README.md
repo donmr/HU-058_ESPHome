@@ -129,7 +129,7 @@ It asks for an encryption key. That is `api_key` out of your `secrets.yaml`.
 
 Do this before you wire anything. Until the device is adopted the clock shows
 the time and ignores everything else, because the light, the switches and
-every effect entity live on the Home Assistant side.
+the other controls live on the Home Assistant side.
 
 ## Wiring
 
@@ -182,8 +182,8 @@ The light platform takes an `aip33628_id` and is otherwise a normal RGB light.
   accurately.
 - Four dashes while there is no valid time. The board has no RTC, so a cold
   boot with no network means no time at all until the network comes back.
-- One RGB "light" entity for the whole display, plus per digit color, per LED
-  color, gradients, a color cycle and a flash effect.
+- One RGB "light" entity that sets the color and brightness of the whole
+  display.
 - Temporary number displays light the degree mark when their unit is C or F.
 - A lamp test lights every populated LED white for three seconds, then restores
   the previous display settings.

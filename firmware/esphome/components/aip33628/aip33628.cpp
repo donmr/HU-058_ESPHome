@@ -221,15 +221,6 @@ void Aip33628Panel::dump_config() {
   ESP_LOGCONFIG(TAG, "  Hour format: %s", twelve_hour_ ? "12 hour" : "24 hour");
   ESP_LOGCONFIG(TAG, "  Colon: %s", blink_colon_ ? "blinking" : "steady");
   ESP_LOGCONFIG(TAG, "  Network: %s", online_ ? "up" : "down");
-  const char *fx = effect_ == Effect::CYCLE ? "color cycle"
-                   : effect_ == Effect::FLASH ? "flash" : "none";
-  const char *sp = spread_ == Spread::DIGIT ? "per digit"
-                   : spread_ == Spread::LED ? "per LED" : "whole panel";
-  // INFO rather than LOGCONFIG on purpose. The rest of this block is wiring
-  // that cannot change, but the effect is live state worth being able to read
-  // back, and CONFIG level messages need a DEBUG logger to be visible at all.
-  ESP_LOGI(TAG, "  Effect: %s, %s, %.1fs, axis %.0f deg, hue span %.0f deg, flash fade %.2fs",
-           fx, sp, effect_speed_, effect_angle_, hue_span_, flash_fade_);
 }
 
 // Emit one 30-bit frame to each driver and latch both. Bits are LSB first:
@@ -328,19 +319,6 @@ void Aip33628Panel::write_digit_(uint8_t block, char c) {
 // never round away to nothing.
 void Aip33628Panel::set_light(bool on, float r, float g, float b, float brightness) {
   enabled_ = on && brightness > 0.0f;
-
-  // Picking a new color on the master light means the whole panel, so it
-  // drops the digit and position tiers. Moving only the brightness slider
-  // leaves them alone, which matters because a transition calls this on
-  // every step and would otherwise wipe a gradient mid fade.
-  bool color_moved = fabsf(r - base_rgb_[0]) > 0.002f || fabsf(g - base_rgb_[1]) > 0.002f ||
-                     fabsf(b - base_rgb_[2]) > 0.002f;
-  if (color_moved && effect_ == Effect::NONE) {
-    for (bool &v : digit_set_)
-      v = false;
-    clear_positions_();
-  }
-
   base_rgb_[0] = r;
   base_rgb_[1] = g;
   base_rgb_[2] = b;
@@ -352,7 +330,7 @@ void Aip33628Panel::set_light(bool on, float r, float g, float b, float brightne
 // that changes a color goes through here, so there is one place that decides
 // what a block ends up at and one place that marks the panel dirty.
 void Aip33628Panel::apply_colors_() {
-  // The lamp test outranks every color tier, including a running effect.
+  // The lamp test outranks the light's color.
   if (mode_ == Mode::LAMP) {
     for (auto &blk : level_)
       for (auto &seg : blk)
@@ -364,118 +342,12 @@ void Aip33628Panel::apply_colors_() {
 
   for (int blk = 0; blk < 4; blk++) {
     for (int seg = 0; seg < 9; seg++) {
-      const float *c = pos_set_[blk][seg]  ? pos_rgb_[blk][seg]
-                       : digit_set_[blk]   ? digit_rgb_[blk]
-                                           : base_rgb_;
-      level_[blk][seg][CH_RED] = duty_level(c[0] * envelope_);
-      level_[blk][seg][CH_GREEN] = duty_level(c[1] * envelope_);
-      level_[blk][seg][CH_BLUE] = duty_level(c[2] * envelope_);
+      level_[blk][seg][CH_RED] = duty_level(base_rgb_[0]);
+      level_[blk][seg][CH_GREEN] = duty_level(base_rgb_[1]);
+      level_[blk][seg][CH_BLUE] = duty_level(base_rgb_[2]);
     }
   }
   dirty_ = true;
-}
-
-// A digit of -1 sets all four at once, which is what a whole display effect
-// wants. Components are taken as given and not normalized: the master light
-// arrives already normalized with its magnitude in the current setting, but a
-// caller here is asking for one digit to look a particular way next to the
-// others, and scaling that back up would throw away the difference.
-void Aip33628Panel::set_digit_color(int digit, float r, float g, float b) {
-  if (digit < -1 || digit > 3)
-    return;
-  for (int blk = 0; blk < 4; blk++) {
-    if (digit != -1 && digit != blk)
-      continue;
-    digit_rgb_[blk][0] = clamp(r, 0.0f, 1.0f);
-    digit_rgb_[blk][1] = clamp(g, 0.0f, 1.0f);
-    digit_rgb_[blk][2] = clamp(b, 0.0f, 1.0f);
-    digit_set_[blk] = true;
-    // Setting a whole digit drops any per position color inside it. Without
-    // this a gradient would sit on top and the digit color would do nothing
-    // visible, which reads as the call being ignored.
-    for (bool &v : pos_set_[blk])
-      v = false;
-  }
-  apply_colors_();
-}
-
-// Hand the whole panel back to the master light, per position overrides
-// included. Anything else would leave a gradient stuck on with no obvious way
-// to clear it.
-void Aip33628Panel::clear_digit_colors() {
-  for (bool &v : digit_set_)
-    v = false;
-  clear_positions_();
-  apply_colors_();
-}
-
-void Aip33628Panel::clear_positions_() {
-  for (auto &blk : pos_set_)
-    for (bool &v : blk)
-      v = false;
-}
-
-// One LED, addressed by the id on the board layout map rather than by block
-// and segment, so the numbering here is the same one written on the map.
-void Aip33628Panel::set_position_color(int id, float r, float g, float b) {
-  for (int blk = 0; blk < 4; blk++) {
-    for (int seg = 0; seg < 9; seg++) {
-      if (GEOM[blk][seg].id != id)
-        continue;
-      pos_rgb_[blk][seg][0] = clamp(r, 0.0f, 1.0f);
-      pos_rgb_[blk][seg][1] = clamp(g, 0.0f, 1.0f);
-      pos_rgb_[blk][seg][2] = clamp(b, 0.0f, 1.0f);
-      pos_set_[blk][seg] = true;
-      apply_colors_();
-      return;
-    }
-  }
-}
-
-// A linear ramp across the panel between two colors. Angle is in degrees, 0
-// running left to right and 90 top to bottom, so -45 runs from the bottom
-// left corner to the top right.
-//
-// The ramp is normalized against the LEDs themselves rather than the panel
-// outline, so the two colors asked for land exactly on the outermost LEDs
-// whichever way the ramp points. Normalizing against the corners instead
-// leaves both ends short, because no LED sits in a corner.
-void Aip33628Panel::set_gradient(float r0, float g0, float b0, float r1, float g1, float b1,
-                                 float angle_deg) {
-  const float a = angle_deg * 3.14159265f / 180.0f;
-  const float ca = cosf(a), sa = sinf(a);
-
-  float lo = 1e9f, hi = -1e9f;
-  for (int blk = 0; blk < 4; blk++) {
-    for (int seg = 0; seg < 9; seg++) {
-      const PosGeom &g = GEOM[blk][seg];
-      if (g.id == 0)
-        continue;
-      float t = (g.nx / 255.0f) * ca + (g.ny / 255.0f) * sa;
-      if (t < lo)
-        lo = t;
-      if (t > hi)
-        hi = t;
-    }
-  }
-  float span = hi - lo;
-  if (span < 1e-6f)
-    span = 1.0f;
-
-  for (int blk = 0; blk < 4; blk++) {
-    for (int seg = 0; seg < 9; seg++) {
-      const PosGeom &g = GEOM[blk][seg];
-      if (g.id == 0)
-        continue;  // nothing wired here
-      float t = ((g.nx / 255.0f) * ca + (g.ny / 255.0f) * sa - lo) / span;
-      t = clamp(t, 0.0f, 1.0f);
-      pos_rgb_[blk][seg][0] = clamp(r0 + (r1 - r0) * t, 0.0f, 1.0f);
-      pos_rgb_[blk][seg][1] = clamp(g0 + (g1 - g0) * t, 0.0f, 1.0f);
-      pos_rgb_[blk][seg][2] = clamp(b0 + (b1 - b0) * t, 0.0f, 1.0f);
-      pos_set_[blk][seg] = true;
-    }
-  }
-  apply_colors_();
 }
 
 // A temporary mode is capped rather than trusted. Ten minutes is far longer
@@ -545,167 +417,8 @@ void Aip33628Panel::draw_number_(int value, char unit) {
   if (neg && pos >= 0) write_digit_(pos, '-');
 }
 
-// Full saturation hue to RGB. Effects ride the color wheel rather than the
-// master light's color, because a rainbow that keeps the user's tint is not
-// a rainbow.
-static void hue_rgb(float h, float *out) {
-  h -= floorf(h);
-  float x = h * 6.0f;
-  int i = (int) x;
-  float f = x - (float) i;
-  switch (i % 6) {
-    case 0:  out[0] = 1.0f;    out[1] = f;       out[2] = 0.0f;    break;
-    case 1:  out[0] = 1.0f - f; out[1] = 1.0f;   out[2] = 0.0f;    break;
-    case 2:  out[0] = 0.0f;    out[1] = 1.0f;    out[2] = f;       break;
-    case 3:  out[0] = 0.0f;    out[1] = 1.0f - f; out[2] = 1.0f;   break;
-    case 4:  out[0] = f;       out[1] = 0.0f;    out[2] = 1.0f;    break;
-    default: out[0] = 1.0f;    out[1] = 0.0f;    out[2] = 1.0f - f; break;
-  }
-}
-
-// Where every position sits along the effect axis, 0 at the trailing edge
-// and 1 at the leading one. Same projection the gradient uses, normalized
-// against the LEDs rather than the panel outline for the same reason. Only
-// recomputed when the angle changes.
-void Aip33628Panel::recompute_axis_() {
-  const float a = effect_angle_ * 3.14159265f / 180.0f;
-  const float ca = cosf(a), sa = sinf(a);
-
-  float lo = 1e9f, hi = -1e9f;
-  for (int blk = 0; blk < 4; blk++) {
-    for (int seg = 0; seg < 9; seg++) {
-      if (GEOM[blk][seg].id == 0)
-        continue;
-      float t = (GEOM[blk][seg].nx / 255.0f) * ca + (GEOM[blk][seg].ny / 255.0f) * sa;
-      if (t < lo) lo = t;
-      if (t > hi) hi = t;
-    }
-  }
-  float span = hi - lo;
-  if (span < 1e-6f)
-    span = 1.0f;
-
-  float blo = 1e9f, bhi = -1e9f;
-  for (int blk = 0; blk < 4; blk++) {
-    float sum = 0.0f;
-    int n = 0;
-    for (int seg = 0; seg < 9; seg++) {
-      if (GEOM[blk][seg].id == 0)
-        continue;
-      float t = ((GEOM[blk][seg].nx / 255.0f) * ca + (GEOM[blk][seg].ny / 255.0f) * sa - lo) / span;
-      axis_pos_[blk][seg] = t;
-      sum += t;
-      n++;
-    }
-    axis_blk_[blk] = n ? sum / (float) n : 0.0f;
-    if (axis_blk_[blk] < blo) blo = axis_blk_[blk];
-    if (axis_blk_[blk] > bhi) bhi = axis_blk_[blk];
-  }
-
-  // Normalized end to end, same as the per position axis. How much of the
-  // wheel that covers is the hue span setting's job, not this one's.
-  float bspan = bhi - blo;
-  if (bspan < 1e-6f)
-    bspan = 1.0f;
-  for (int blk = 0; blk < 4; blk++)
-    axis_blk_[blk] = (axis_blk_[blk] - blo) / bspan;
-}
-
-void Aip33628Panel::set_effect(int mode) {
-  Effect want = mode == 1 ? Effect::CYCLE : mode == 2 ? Effect::FLASH : Effect::NONE;
-  if (want == effect_)
-    return;
-  effect_ = want;
-  effect_t0_ = millis();
-  effect_at_ = 0;
-  // Leaving an effect hands the panel back rather than freezing on whatever
-  // frame it happened to stop at.
-  envelope_ = 1.0f;
-  if (want == Effect::NONE)
-    clear_positions_();
-  if (want == Effect::CYCLE)
-    recompute_axis_();
-  apply_colors_();
-}
-
-void Aip33628Panel::set_effect_speed(float seconds) {
-  effect_speed_ = seconds < 0.1f ? 0.1f : (seconds > 600.0f ? 600.0f : seconds);
-}
-
-void Aip33628Panel::set_effect_spread(int mode) {
-  spread_ = mode == 1 ? Spread::DIGIT : mode == 2 ? Spread::LED : Spread::PANEL;
-}
-
-void Aip33628Panel::set_effect_angle(float deg) {
-  effect_angle_ = deg;
-  recompute_axis_();
-}
-
-void Aip33628Panel::set_effect_hue_span(float deg) {
-  hue_span_ = deg < 0.0f ? 0.0f : (deg > 360.0f ? 360.0f : deg);
-}
-
-void Aip33628Panel::set_flash_fade(float seconds) {
-  flash_fade_ = seconds < 0.0f ? 0.0f : (seconds > 300.0f ? 300.0f : seconds);
-}
-
-// Advance whichever effect is running. Called from loop() at a fixed cadence
-// rather than every pass, since the scan is what the eye sees and a redraw
-// faster than about 25Hz buys nothing.
-void Aip33628Panel::update_effect_(uint32_t now_ms) {
-  float period = effect_speed_;
-  float phase = fmodf((float) (now_ms - effect_t0_) / 1000.0f / period, 1.0f);
-
-  if (effect_ == Effect::FLASH) {
-    // A trapezoid. Rate and transition time are separate, so 1Hz with a 100ms
-    // ramp and 1Hz snapping hard are both reachable. The on and off halves
-    // stay even and the ramps eat into them rather than stretching the
-    // period, so changing the fade never changes the flash rate.
-    const float half = period * 0.5f;
-    const float f = flash_fade_ > half ? half : flash_fade_;
-    const float t = phase * period;
-    float e;
-    if (f <= 0.0f) {
-      e = t < half ? 1.0f : 0.0f;  // square
-    } else if (t < f) {
-      e = t / f;
-    } else if (t < half) {
-      e = 1.0f;
-    } else if (t < half + f) {
-      e = 1.0f - (t - half) / f;
-    } else {
-      e = 0.0f;
-    }
-    envelope_ = e;
-    apply_colors_();
-    return;
-  }
-
-  // How much of the wheel the panel covers end to end. A full turn across
-  // four digits packs the whole spectrum into a hand span and reads as noise.
-  const float span = hue_span_ / 360.0f;
-
-  for (int blk = 0; blk < 4; blk++) {
-    for (int seg = 0; seg < 9; seg++) {
-      if (GEOM[blk][seg].id == 0)
-        continue;
-      float t = spread_ == Spread::PANEL  ? 0.0f
-                : spread_ == Spread::DIGIT ? axis_blk_[blk]
-                                           : axis_pos_[blk][seg];
-      hue_rgb(phase + t * span, pos_rgb_[blk][seg]);
-      pos_set_[blk][seg] = true;
-    }
-  }
-  apply_colors_();
-}
-
 void Aip33628Panel::loop() {
   uint32_t now_ms = millis();
-
-  if (effect_ != Effect::NONE && (int32_t) (now_ms - effect_at_) >= 0) {
-    effect_at_ = now_ms + 40;  // 25Hz, smooth enough for a fade to glide
-    update_effect_(now_ms);
-  }
 
   // A temporary mode expires here rather than anywhere else, so there is one
   // place that can put the panel back to being a clock.

@@ -130,8 +130,6 @@ Assistant:
 
 - One RGB "light" entity for the whole display. Color sets the per channel duty,
   brightness sets the driver current.
-- Effects: Per digit and per LED color, gradients at any angle, a color cycle and a
-  flash effect.
 - Switches for 12h/24h time and colon blink, the two front panel buttons as
   plain inputs, and actions to push a number/characters or the seconds onto the display
   for a few seconds. A unit of C or F lights the degree mark with the number.
@@ -179,7 +177,7 @@ frame per COM pair.
 
 ## Status
 
-With the ESP32 firmware, the clock shows NTP time. All configuration is done with Home Assistant which owns color and brightness along with effects and settings like 12/24hz time, etc. 
+With the ESP32 firmware, the clock shows NTP time. All configuration is done with Home Assistant which owns color and brightness along with settings like 12/24hz time, etc. 
 
 Firmware updates go over the air, part of the ESPHome suite.
 

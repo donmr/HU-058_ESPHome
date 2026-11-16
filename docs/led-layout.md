@@ -12,7 +12,7 @@ into blobs, then fitting an affine transform to the twenty eight segment pads.
 
 ## Coordinates
 
-`id` is a position number, and is what `set_position_color` takes.
+`id` is a position number, matching the board layout map.
 
 `nx` runs 0 at the left edge of the first digit to 1 at the right edge of the
 last, `ny` 0 at the top of a digit to 1 at the bottom. The lit area measures
@@ -70,18 +70,15 @@ the degree mark sits in the gap before the last digit rather than after it.
 
 ## What this is for
 
-Color resolves in three tiers. A position with its own color wins, then the
-digit it belongs to, then the master light. `set_gradient` writes the position
-tier for every LED at once.
+The current firmware drives every LED in one color from the `Display` light and
+does not use these coordinates. They are kept as hardware reference for
+anything that needs to know where each LED physically sits, such as a gradient
+or a wipe.
 
-A gradient is a linear ramp between two colors, projected onto an axis at any
-angle. It is normalized against the LEDs themselves rather than the panel
-outline, so both colors land exactly on the outermost LEDs whichever way the
-ramp points.
+A gradient projected onto an axis should be normalized against the LEDs
+themselves rather than the panel outline. Normalizing against the corners
+leaves both ends short, because no LED sits in a corner.
 
-Normalizing against the corners leaves both ends short, because no LED sits in
-a corner.
-
-Per position color costs nothing in the scan. The step count is four COM pairs
-times four sub-frames whatever the content, so more colors mean less merging
-and never more steps.
+Per position color would cost nothing in the scan. The step count is four COM
+pairs times four sub-frames whatever the content, so more colors mean less
+merging and never more steps.
