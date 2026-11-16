@@ -1,6 +1,6 @@
 substitutions:
-  name: bedroom-clock
-  friendly_name: Bedroom Clock
+  name: clock2
+  friendly_name: Clock 2
 
 esphome:
   name: ${name}
@@ -190,7 +190,7 @@ aip33628:
   # Power on defaults. The switches below own both after that, and they
   # restore their last state, so these only matter for a first ever boot.
   twelve_hour: true
-  blink_colon: true
+  blink_colon: false
   # Ceiling on IS[3:0], 0 to 15. Fixed, never varied by content. The stock
   # firmware ran 0xF and drew 404mA doing it. Drop this if the drivers
   # run hotter than you want. See docs/display-map.md.
@@ -206,6 +206,27 @@ light:
     # the 2.5mA floor the drivers cannot go below. Leaving it on here as well
     # would square it.
     gamma_correct: 1.0
+
+# Read the light level sensor
+# Taken from the MrCeedJay fork:
+sensor:
+  - platform: adc
+    pin: GPIO35
+    id: light_sensor
+    name: Room Light
+    attenuation: auto
+    update_interval: 5s
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    filters:
+      - calibrate_linear:
+          method: exact
+          datapoints:
+            - 0.0 -> 100.0
+            - 3.3 -> 0.0
+      - clamp:
+          min_value: 0.0
+          max_value: 100.0
 
 # The two front panel buttons. Nothing on the board pulls these nets up. The
 # stock 8051 held them high with its own quasi-bidirectional port pullup, and
@@ -228,6 +249,7 @@ binary_sensor:
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms
+
   - platform: gpio
     id: button_2
     name: Button 2
@@ -240,6 +262,20 @@ binary_sensor:
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms
+
+script:
+  - id: buzzer_beep
+    mode: restart
+    then:
+      - output.turn_on: buzzer_output
+      - output.ledc.set_frequency:
+          id: buzzer_output
+          frequency: !lambda "return id(buzzer_frequency).state;"
+      - output.set_level:
+          id: buzzer_output
+          level: !lambda "return id(buzzer_volume).state / 200.0f;"
+      - delay: !lambda "return (uint32_t) id(buzzer_duration).state;"
+      - output.turn_off: buzzer_output
 
 switch:
   - platform: template
@@ -263,7 +299,20 @@ switch:
     turn_off_action:
       - lambda: id(panel)->set_blink_colon(false);
 
+output:
+  - platform: ledc
+    pin: GPIO25
+    id: buzzer_output
+    frequency: 2000 Hz
+    inverted: true
+
 button:
+  - platform: template
+    name: Buzzer Beep
+    icon: mdi:volume-high
+    on_press:
+      - script.execute: buzzer_beep
+
   # Three seconds of every populated LED lit white at half brightness, then
   # back to the time with the settings it had before.
   - platform: template
@@ -353,6 +402,43 @@ select:
           id(panel)->show_number((int) id(test_number).state, u, 10000);
 
 number:
+
+  - platform: template
+    name: Buzzer Duration
+    id: buzzer_duration
+    optimistic: true
+    restore_value: true
+    initial_value: 100
+    min_value: 1
+    max_value: 10000
+    step: 1
+    unit_of_measurement: ms
+    mode: box
+
+  - platform: template
+    name: Buzzer Frequency
+    id: buzzer_frequency
+    optimistic: true
+    restore_value: true
+    initial_value: 2000
+    min_value: 100
+    max_value: 10000
+    step: 1
+    unit_of_measurement: Hz
+    mode: box
+
+  - platform: template
+    name: Buzzer Volume
+    id: buzzer_volume
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+    min_value: 0
+    max_value: 100
+    step: 1
+    unit_of_measurement: "%"
+    mode: slider
+
   # Seconds for one full cycle. For Flash this is one complete on and off.
   - platform: template
     name: Effect Speed
