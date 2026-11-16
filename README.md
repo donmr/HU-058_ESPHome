@@ -1,4 +1,48 @@
-# Open firmware for the HU-058D WiFi clock
+# Open firmware for the HU-058D WiFi clock with added buzzer and light sensor
+
+
+I have added support for buzzer, temp and light sensor based on teh work and fork by MrCreedJay but with the 5V cut in a different place to affect the light sensor as well
+
+The 5V needs to be cut and 3.3V connected instead to both the light sensor and the buzzer driver
+Only clock.yaml has been changed. Added beep with changeable duration and frequency, and light (0-100%) to Home Assistant device dashboard. 
+
+The pullup resistor for the light sensor was changed to 22k
+
+The new connections are:
+
+| ESP32 | Socket pin | Net |
+| --- | --- | --- |
+| GPIO35 | 4 | RP, LDR light sensor |
+| GPIO25 | 11 | RB, buzzer |
+
+I made a test automation in Home Assistant to automatically adjust the display brightness. It works but it's just for demo.  
+
+In the example YAML, an LDR value of 3% corresponds to 1% display brightness, while an LDR value of 15% corresponds to 50% display brightness, with linear scaling.
+### Automatic Display Brightness
+
+```yaml
+alias: WiFi Clock - Automatic Display Brightness
+description: ""
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: sensor.wifi_clock_light
+
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: light.wifi_clock_display
+    data:
+      brightness_pct: >
+        {% set min_light = 1 %}
+        {% set max_light = 75 %}
+        {% set min_brightness = 1 %}
+        {% set max_brightness = 50 %}
+        {% set light = states('sensor.wifi_clock_light') | float %}
+        {{ ((light - min_light) / (max_light - min_light) * (max_brightness - min_brightness) + min_brightness) | round }}
+```
+
 
 The AliExpress kit sold as an "ESP8266 IoT Colorful WiFi Clock Kit" ships closed firmware which is lame and terrible. (And really hard to use.) I have reverse engineered the way to drive the display so you can use your own microcontroller. 
 
@@ -56,6 +100,8 @@ The buttons are connected to the ESP32-WROOM-32 in the ESPHome firmware, and are
 | GPIO18 | 2 | DATA_1, driver 2 |
 | GPIO32 | 9 | S1, top button |
 | GPIO33 | 10 | S2, bottom button |
+| GPIO35 | 4 | RP, LDR light sensor |
+| GPIO25 | 11 | RB, buzzer |
 | GND | 8 | GND |
 
 The drivers run from the 5V rail but work perfectly with the 3.3V drive signals from the ESP32.

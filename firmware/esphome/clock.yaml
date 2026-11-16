@@ -223,7 +223,7 @@ sensor:
           method: exact
           datapoints:
             - 0.0 -> 100.0
-            - 3.3 -> 0.0
+            - 3.1 -> 0.0
       - clamp:
           min_value: 0.0
           max_value: 100.0
