@@ -1,10 +1,10 @@
 # Open firmware for the HU-058D WiFi clock with added buzzer and light sensor
 
 
-I have added support for buzzer, temp and light sensor based on teh work and fork by MrCreedJay but with the 5V cut in a different place to affect the light sensor as well
+I have added support for buzzer and light sensor based on the work and fork by MrCreedJay but with the 5V cut in a different place to affect the light sensor as well.
 
 The 5V needs to be cut and 3.3V connected instead to both the light sensor and the buzzer driver
-Only clock.yaml has been changed. Added beep with changeable duration and frequency, and light (0-100%) to Home Assistant device dashboard. 
+This adds a beep with changeable duration, frequency and volume, and room light (0-100%), to the Home Assistant device dashboard. 
 
 The pullup resistor for the light sensor was changed to 22k
 
@@ -15,33 +15,15 @@ The new connections are:
 | GPIO35 | 4 | RP, LDR light sensor |
 | GPIO25 | 11 | RB, buzzer |
 
-I made a test automation in Home Assistant to automatically adjust the display brightness. It works but it's just for demo.  
+### Automatic display brightness
 
-In the example YAML, an LDR value of 3% corresponds to 1% display brightness, while an LDR value of 15% corresponds to 50% display brightness, with linear scaling.
-### Automatic Display Brightness
+Turn on the `Auto Brightness` switch and the clock dims itself to suit the room, with no Home Assistant automation needed. The `Display` light's brightness becomes the maximum. The display runs from 1% in the dark up to that maximum at a `Room Light` reading of 75, with linear scaling. The 75 is the `room_light_full` setting in `clock.yaml`.
 
-```yaml
-alias: WiFi Clock - Automatic Display Brightness
-description: ""
-mode: restart
+### Alarm
 
-triggers:
-  - trigger: state
-    entity_id: sensor.wifi_clock_light
+Turn on the `Alarm` switch and the clock plays a series of beeps, then turns the switch off when it finishes. Turning the switch off early stops the alarm immediately. `Alarm Steps` sets the number of beeps. Each beep is 25% louder than the last, reaching `Buzzer Volume` at the middle beep and staying there for the rest.
 
-actions:
-  - action: light.turn_on
-    target:
-      entity_id: light.wifi_clock_display
-    data:
-      brightness_pct: >
-        {% set min_light = 1 %}
-        {% set max_light = 75 %}
-        {% set min_brightness = 1 %}
-        {% set max_brightness = 50 %}
-        {% set light = states('sensor.wifi_clock_light') | float %}
-        {{ ((light - min_light) / (max_light - min_light) * (max_brightness - min_brightness) + min_brightness) | round }}
-```
+The clock does not schedule the alarm itself, so use a Home Assistant automation to turn the switch on at the time you want.
 
 
 The AliExpress kit sold as an "ESP8266 IoT Colorful WiFi Clock Kit" ships closed firmware which is lame and terrible. (And really hard to use.) I have reverse engineered the way to drive the display so you can use your own microcontroller. 
@@ -88,7 +70,7 @@ The LED display on this clock is multiplexed at around 400hz, so there may be so
 
 ## The conversion
 
-Do not install the socket for the MCU, you will be connecting the new MCU to those pins. Do not install the Dallas or ESP device. Leave off the NTC and light sensor. Don't bother with the buzzer and driver transistor unless you want to use those. They are not used in my firmware. 
+Do not install the socket for the MCU, you will be connecting the new MCU to those pins. Do not install the Dallas or ESP device. Leave off the NTC, which is not used in the firmware. The light sensor, buzzer and driver transistor are only needed for the room light, automatic brightness and alarm features, and need the changes described at the top of this page. 
 
 The buttons are connected to the ESP32-WROOM-32 in the ESPHome firmware, and are exposed as entities in Home Assistant. If your ESP32 board doesn't expose the GPIO lines listed below, you will need to change the firmware to match the hardware you have. The WROOM-32 board fits perfectly inside the existing clock case once your remote the pin headers.
 
@@ -135,6 +117,10 @@ Assistant:
   for a few seconds. A unit of C or F lights the degree mark with the number.
 - A lamp test button that lights every populated LED white for three seconds,
   then returns to the time with the previous settings.
+- A room light sensor and an Auto Brightness switch that dims the display to
+  suit the room, using the light's brightness as the maximum.
+- A buzzer with a beep button and settings for duration, frequency and volume,
+  plus an Alarm switch that plays a rising series of beeps and turns itself off.
 
 `firmware/esp32/panel-test/` is a bare-metal PlatformIO project that drives
 the same panel with nothing but the Arduino core. It is the better starting
@@ -181,8 +167,8 @@ With the ESP32 firmware, the clock shows NTP time. All configuration is done wit
 
 Firmware updates go over the air, part of the ESPHome suite.
 
-Out of scope by choice: the buzzer, the light sensor and the NTC thermistor. The
-buttons are exposed to Home Assistant but carry no built-in behavior.
+Out of scope by choice: the NTC thermistor. The buttons are exposed to Home
+Assistant but carry no built-in behavior.
 
 ## AI Disclaimer
 

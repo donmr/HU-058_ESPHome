@@ -178,6 +178,8 @@ binary_sensor:
 script:
   - id: buzzer_beep
     mode: restart
+    parameters:
+      volume: float
     then:
       - output.turn_on: buzzer_output
       - output.ledc.set_frequency:
@@ -185,9 +187,31 @@ script:
           frequency: !lambda "return id(buzzer_frequency).state;"
       - output.set_level:
           id: buzzer_output
-          level: !lambda "return id(buzzer_volume).state / 200.0f;"
+          level: !lambda "return volume / 200.0f;"
       - delay: !lambda "return (uint32_t) id(buzzer_duration).state;"
       - output.turn_off: buzzer_output
+
+  # Plays Alarm Steps beeps. Each is 25% louder than the last, timed so the
+  # middle beep reaches Buzzer Volume, and the rest hold at that level. Buzzer
+  # Volume itself is never changed. Started and stopped by the Alarm switch,
+  # and turns that switch off when it finishes.
+  - id: alarm_loop
+    mode: single
+    then:
+      - repeat:
+          count: !lambda "return (uint32_t) id(alarm_steps).state;"
+          then:
+            - script.execute:
+                id: buzzer_beep
+                volume: !lambda |-
+                  const int middle = ((int) id(alarm_steps).state - 1) / 2;
+                  float scale = std::min(powf(1.25f, (int) iteration - middle), 1.0f);
+                  return id(buzzer_volume).state * scale;
+            - delay: !lambda "return (uint32_t) id(buzzer_duration).state + 500;"
+      # Publish rather than turn off, since there is nothing left to stop.
+      - switch.template.publish:
+          id: alarm_switch
+          state: false
 
 switch:
   - platform: template
@@ -224,6 +248,21 @@ switch:
     turn_off_action:
       - lambda: id(panel)->set_auto_brightness(false);
 
+  # On starts the alarm, off stops it and silences the buzzer at once. Always
+  # off after a reboot, so a restart can never set the alarm off.
+  - platform: template
+    id: alarm_switch
+    name: Alarm
+    icon: mdi:alarm-bell
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - script.execute: alarm_loop
+    turn_off_action:
+      - script.stop: alarm_loop
+      - script.stop: buzzer_beep
+      - output.turn_off: buzzer_output
+
 output:
   - platform: ledc
     pin: GPIO25
@@ -236,7 +275,9 @@ button:
     name: Buzzer Beep
     icon: mdi:volume-high
     on_press:
-      - script.execute: buzzer_beep
+      - script.execute:
+          id: buzzer_beep
+          volume: !lambda "return id(buzzer_volume).state;"
 
   # Three seconds of every populated LED lit white at half brightness, then
   # back to the time with the settings it had before.
@@ -290,3 +331,15 @@ number:
     step: 1
     unit_of_measurement: "%"
     mode: slider
+
+  - platform: template
+    name: Alarm Steps
+    id: alarm_steps
+    icon: mdi:counter
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+    min_value: 1
+    max_value: 100
+    step: 1
+    mode: box

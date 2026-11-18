@@ -60,6 +60,8 @@ current, so use it as a momentary check rather than putting it on a loop.
 | `switch.wifi_clock_12_hour_time` | Switch | On for 12h, off for 24h |
 | `switch.wifi_clock_blink_colon` | Switch | Off means steady, not dark |
 | `switch.wifi_clock_auto_brightness` | Switch | On scales the display to the room light |
+| `switch.wifi_clock_alarm` | Switch | On plays the alarm, off stops it, turns itself off when done |
+| `number.wifi_clock_alarm_steps` | Number | Beeps per alarm, 1 to 100 |
 | `binary_sensor.wifi_clock_button_1` | Binary sensor | Top button on the case |
 | `binary_sensor.wifi_clock_button_2` | Binary sensor | Bottom button |
 | `button.wifi_clock_lamp_test` | Button | Three seconds of every LED, white |

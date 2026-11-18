@@ -186,6 +186,12 @@ The light platform takes an `aip33628_id` and is otherwise a normal RGB light.
   display.
 - An Auto Brightness switch that dims the display to suit the room, using the
   light's brightness as the maximum.
+- An Alarm switch that plays the number of beeps set by Alarm Steps, 20 by
+  default, then turns itself off. Turning it off early stops the alarm
+  immediately. Each beep is 25 percent louder than the last, timed so the middle
+  beep reaches Buzzer Volume, and the remaining beeps hold at that level. It
+  uses the Buzzer Duration and Buzzer Frequency settings. What time it goes off
+  is left to Home Assistant.
 - Temporary number displays light the degree mark when their unit is C or F.
 - A lamp test lights every populated LED white for three seconds, then restores
   the previous display settings.
