@@ -38,8 +38,8 @@ I didn't bother to capture these signals, since they were irrelevant.
 | 6 | VCC | +5V | Supply |
 | 7 | P5.5 | P5.5 | Not connected |
 | 8 | GND | GND | Ground |
-| 9 | P3.0/ADC8/RXD/INT4 | S1 | Button SW2 to GND, also ISP RX |
-| 10 | P3.1/ADC9/TXD | S2 | Button SW1 to GND, also ISP TX |
+| 9 | P3.0/ADC8/RXD/INT4 | S2 | Button SW2 to GND, also ISP RX |
+| 10 | P3.1/ADC9/TXD | S1 | Button SW1 to GND, also ISP TX |
 | 11 | P3.2/ADC10/INT0 | R_B | Buzzer, R5 10K to Q1 S8550 base |
 | 12 | P3.3/ADC11/INT1 | - | No connection |
 | 13 | P3.4/ADC12/T0 | - | No connection |

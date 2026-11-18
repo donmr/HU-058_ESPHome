@@ -42,8 +42,8 @@ Every signal the panel needs lands on the DIP-16 footprint.
 | 2 | DATA_1 | Driver 2 data |
 | 5 | DATA | Driver 1 data |
 | 8 | GND | Common ground |
-| 9 | S1 | Top button, switch to ground |
-| 10 | S2 | Bottom button, switch to ground |
+| 9 | S2 | Bottom button, switch to ground |
+| 10 | S1 | Top button, switch to ground |
 | 14 or 16 | CLK | Driver 1 clock, depending on board revision |
 
 Pin 1 is the end marked on the silkscreen.
@@ -62,8 +62,8 @@ sensor, is in `hardware.md`.
 | GPIO21 | 5 | DATA, driver 1 |
 | GPIO19 | 1 | CLK_1, driver 2 |
 | GPIO18 | 2 | DATA_1, driver 2 |
-| GPIO32 | 9 | S1, top button |
-| GPIO33 | 10 | S2, bottom button |
+| GPIO32 | 10 | S1, top button |
+| GPIO33 | 9 | S2, bottom button |
 | GND | 8 | GND |
 
 Solder straight into the empty through holes. That is what fits in the case,

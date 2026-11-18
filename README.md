@@ -80,8 +80,8 @@ The buttons are connected to the ESP32-WROOM-32 in the ESPHome firmware, and are
 | GPIO21 | 5 | DATA, driver 1 |
 | GPIO19 | 1 | CLK_1, driver 2 |
 | GPIO18 | 2 | DATA_1, driver 2 |
-| GPIO32 | 9 | S1, top button |
-| GPIO33 | 10 | S2, bottom button |
+| GPIO32 | 10 | S1, top button |
+| GPIO33 | 9 | S2, bottom button |
 | GPIO35 | 4 | RP, LDR light sensor |
 | GPIO25 | 11 | RB, buzzer |
 | GND | 8 | GND |
