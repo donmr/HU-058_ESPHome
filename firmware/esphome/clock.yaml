@@ -1,6 +1,9 @@
 substitutions:
   name: clock2
   friendly_name: Clock 2
+  # Room Light reading at which Auto Brightness reaches the Display light's
+  # brightness. Anything brighter stays there.
+  room_light_full: "75.0"
 
 esphome:
   name: ${name}
@@ -134,6 +137,8 @@ sensor:
       - clamp:
           min_value: 0.0
           max_value: 100.0
+    on_value:
+      - lambda: id(panel)->set_room_level(x / ${room_light_full});
 
 # The two front panel buttons. Nothing on the board pulls these nets up. The
 # stock 8051 held them high with its own quasi-bidirectional port pullup, and
@@ -205,6 +210,19 @@ switch:
       - lambda: id(panel)->set_blink_colon(true);
     turn_off_action:
       - lambda: id(panel)->set_blink_colon(false);
+
+  # On, the Display light's brightness is the maximum, and the room light
+  # scales the panel between 1% and that. Off, the panel follows the light.
+  - platform: template
+    id: auto_brightness
+    name: Auto Brightness
+    icon: mdi:brightness-auto
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: id(panel)->set_auto_brightness(true);
+    turn_off_action:
+      - lambda: id(panel)->set_auto_brightness(false);
 
 output:
   - platform: ledc

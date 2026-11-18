@@ -184,6 +184,8 @@ The light platform takes an `aip33628_id` and is otherwise a normal RGB light.
   boot with no network means no time at all until the network comes back.
 - One RGB "light" entity that sets the color and brightness of the whole
   display.
+- An Auto Brightness switch that dims the display to suit the room, using the
+  light's brightness as the maximum.
 - Temporary number displays light the degree mark when their unit is C or F.
 - A lamp test lights every populated LED white for three seconds, then restores
   the previous display settings.
@@ -201,7 +203,8 @@ comfortable at 416Hz.
 ## Current
 
 `max_current` is a fixed ceiling on `IS[3:0]`, 0 to 15. The Home Assistant
-brightness slider maps onto that range and nothing else touches it.
+brightness slider maps onto that range, scaled by the room light when Auto
+Brightness is on, and nothing else touches it.
 
 It deliberately does not depend on what is on screen. Counting lit sinks to
 hold a milliamp budget gives you a panel that dims itself once a second as the
@@ -238,6 +241,23 @@ Both arrive linear from the light platform. The magnitude comes from
 `current_values_as_brightness()` rather than `current_values.get_brightness()`,
 because only the helper carries the transition state, without which a fade
 never moves.
+
+### Auto Brightness
+
+With the `Auto Brightness` switch on, the light's brightness becomes the
+maximum. The display runs from 1 percent with the `Room Light` sensor at 0 up
+to that maximum at the `room_light_full` substitution, 75 by default, in a
+straight line. The switch is off on a first boot and restores its last state
+after that.
+
+This runs on the device, so it keeps working without Home Assistant. It never
+writes to the light entity, so the slider keeps showing the maximum rather than
+moving with the room. Do not also run an automation that sets the light's
+brightness from the room level, because it would overwrite that maximum.
+
+Room level changes under 2 percent of the range are ignored. The sensor wanders
+by about 1 point in steady light, which would otherwise flip the display between
+two current steps. The lamp test is not affected.
 
 ## Scan timing
 

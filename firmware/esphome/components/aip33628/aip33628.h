@@ -108,6 +108,14 @@ class Aip33628Panel : public Component {
     dirty_ = true;
   }
 
+  // With auto brightness on, the light's brightness becomes the ceiling and
+  // the room level picks a point below it. The light entity itself is never
+  // written, so the Home Assistant slider keeps showing the ceiling. The level
+  // is 0 for dark to 1 for bright, fed from the sensor in clock.yaml, and is
+  // tracked even while this is off so switching on takes effect immediately.
+  void set_auto_brightness(bool v);
+  void set_room_level(float level);
+
   void setup() override;
   void loop() override;
   void dump_config() override;
@@ -128,6 +136,7 @@ class Aip33628Panel : public Component {
  protected:
   void render_();
   void apply_colors_();
+  void update_current_();
   void write_digit_(uint8_t block, char c);
   void write_pos_(uint8_t block, uint8_t seg, bool on);
   void draw_number_(int value, char unit);
@@ -159,6 +168,13 @@ class Aip33628Panel : public Component {
   // [block][segment][channel], 0 to COLOR_LEVELS - 1, index by Channel.
   uint8_t level_[4][9][3]{};
   uint8_t requested_current_{15};
+
+  // The light's brightness, linear, including any transition in progress.
+  float brightness_{1.0f};
+  bool auto_brightness_{false};
+  // Starts dark, so a boot in a dark room does not flash at the ceiling while
+  // waiting for the first sensor reading.
+  float room_level_{0.0f};
 
   // The master light's color before it is quantized.
   float base_rgb_[3]{1.0f, 1.0f, 1.0f};

@@ -59,6 +59,7 @@ current, so use it as a momentary check rather than putting it on a loop.
 | `light.wifi_clock_display` | Light | RGB, on/off, brightness, color |
 | `switch.wifi_clock_12_hour_time` | Switch | On for 12h, off for 24h |
 | `switch.wifi_clock_blink_colon` | Switch | Off means steady, not dark |
+| `switch.wifi_clock_auto_brightness` | Switch | On scales the display to the room light |
 | `binary_sensor.wifi_clock_button_1` | Binary sensor | Top button on the case |
 | `binary_sensor.wifi_clock_button_2` | Binary sensor | Bottom button |
 | `button.wifi_clock_lamp_test` | Button | Three seconds of every LED, white |
@@ -69,6 +70,11 @@ current, so use it as a momentary check rather than putting it on a loop.
 The `Display` light sets one color for every LED on the panel. Color sets the
 duty cycle levels, brightness sets the drive current, and the two are
 independent.
+
+With `Auto Brightness` on, the light's brightness is the maximum. The clock
+scales itself between 1% in the dark and that maximum in a bright room, with no
+automation needed. Automations that set the light's brightness change the
+maximum, so remove any that follow the room light.
 
 ## Examples
 

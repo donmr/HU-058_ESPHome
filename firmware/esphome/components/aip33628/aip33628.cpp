@@ -156,6 +156,15 @@ static uint8_t current_for(float brightness) {
 // Half brightness keeps the all-white hardware check brief and predictable.
 static const float LAMP_BRIGHTNESS = 0.5f;
 
+// Auto brightness runs from this floor in a dark room up to the light's own
+// brightness in a bright one.
+static const float AUTO_BRIGHTNESS_FLOOR = 0.01f;
+
+// Smallest change in room level worth acting on. The LDR reading wanders by
+// about 0.012 in steady light, and the low current steps are far enough
+// apart that flipping between two of them is plainly visible.
+static const float ROOM_LEVEL_DEADBAND = 0.02f;
+
 // Color component to a duty level. Duty is linear light, so the component
 // has to be linearized before it is rounded, or every pastel rounds up to a
 // saturated color. Pink is the clearest case, and rounds all the way to
@@ -221,6 +230,7 @@ void Aip33628Panel::dump_config() {
   ESP_LOGCONFIG(TAG, "  Hour format: %s", twelve_hour_ ? "12 hour" : "24 hour");
   ESP_LOGCONFIG(TAG, "  Colon: %s", blink_colon_ ? "blinking" : "steady");
   ESP_LOGCONFIG(TAG, "  Network: %s", online_ ? "up" : "down");
+  ESP_LOGCONFIG(TAG, "  Auto brightness: %s", auto_brightness_ ? "on" : "off");
 }
 
 // Emit one 30-bit frame to each driver and latch both. Bits are LSB first:
@@ -322,8 +332,41 @@ void Aip33628Panel::set_light(bool on, float r, float g, float b, float brightne
   base_rgb_[0] = r;
   base_rgb_[1] = g;
   base_rgb_[2] = b;
-  requested_current_ = current_for(brightness);
+  brightness_ = brightness;
+  update_current_();
   apply_colors_();
+}
+
+void Aip33628Panel::set_auto_brightness(bool v) {
+  auto_brightness_ = v;
+  update_current_();
+}
+
+void Aip33628Panel::set_room_level(float level) {
+  if (std::isnan(level))
+    return;
+  level = clamp(level, 0.0f, 1.0f);
+  // The ends always get through, so the deadband cannot leave the display
+  // short of its floor or its ceiling.
+  bool at_end = level == 0.0f || level == 1.0f;
+  if (!at_end && fabsf(level - room_level_) < ROOM_LEVEL_DEADBAND)
+    return;
+  room_level_ = level;
+  if (auto_brightness_)
+    update_current_();
+}
+
+// The one place that turns brightness into a current step. A ceiling below the
+// floor wins, so the display is never brighter than the slider asks for.
+void Aip33628Panel::update_current_() {
+  float b = brightness_;
+  if (auto_brightness_ && b > AUTO_BRIGHTNESS_FLOOR)
+    b = AUTO_BRIGHTNESS_FLOOR + room_level_ * (b - AUTO_BRIGHTNESS_FLOOR);
+  uint8_t is = current_for(b);
+  if (is != requested_current_) {
+    requested_current_ = is;
+    dirty_ = true;
+  }
 }
 
 // Quantize whatever color each block is currently supposed to be. Everything
